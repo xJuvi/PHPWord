@@ -1063,7 +1063,7 @@ class TemplateProcessor
      *
      * @return string
      */
-    /*protected function fixBrokenMacros($documentPart)
+    protected function fixBrokenMacros($documentPart)
     {
         $brokenMacroOpeningChars = substr(self::$macroOpeningChars, 0, 1);
         $endMacroOpeningChars = substr(self::$macroOpeningChars, 1);
@@ -1076,7 +1076,7 @@ class TemplateProcessor
             },
             $documentPart
         );
-    }*/
+    }/*
     protected function fixBrokenMacros($documentPart)
 {
     $opening = preg_quote(self::$macroOpeningChars, '/'); // z. B. \{\{
@@ -1092,7 +1092,7 @@ class TemplateProcessor
         },
         $documentPart
     );
-}
+}*/
 
     /**
      * Find and replace macros in the given XML section.
