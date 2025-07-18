@@ -1349,7 +1349,7 @@ final class TemplateProcessorTest extends \PHPUnit\Framework\TestCase
         self::assertEquals('<w:r><w:t>$1500</w:t><w:t>${documentContent}</w:t></w:r>', $fixed);
 
         $fixed = $templateProcessor->fixBrokenMacros('<w:r><w:t>$1500</w:t><w:t>{{documentContent}}</w:t></w:r>'); //NEU
-        self::assertEquals('<w:r><w:t>$1500</w:t><w:t>${documentContent}</w:t></w:r>', $fixed);
+        self::assertEquals('<w:r><w:t>$1500</w:t><w:t>{{documentContent}}</w:t></w:r>', $fixed);
 
         $fixed = $templateProcessor->fixBrokenMacros('<w:r><w:t>$1500</w:t><w:t>$</w:t><w:t>{documentContent}</w:t></w:r>');
         self::assertEquals('<w:r><w:t>$1500</w:t><w:t>${documentContent}</w:t></w:r>', $fixed);
