@@ -1063,7 +1063,7 @@ class TemplateProcessor
      *
      * @return string
      */
-    protected function fixBrokenMacros($documentPart)
+    /*protected function fixBrokenMacros($documentPart)
     {
         $brokenMacroOpeningChars = substr(self::$macroOpeningChars, 0, 1);
         $endMacroOpeningChars = substr(self::$macroOpeningChars, 1);
@@ -1076,7 +1076,23 @@ class TemplateProcessor
             },
             $documentPart
         );
-    }
+    }*/
+    protected function fixBrokenMacros($documentPart)
+{
+    $opening = preg_quote(self::$macroOpeningChars, '/'); // z. B. \{\{
+    $closing = preg_quote(self::$macroClosingChars, '/'); // z. B. \}\}
+
+    $pattern = '/' . $opening . '.*?' . $closing . '/us';
+
+    return preg_replace_callback(
+        $pattern,
+        function ($match) {
+            // Entfernt alle Word-XML-Tags innerhalb eines Makros
+            return strip_tags($match[0]);
+        },
+        $documentPart
+    );
+}
 
     /**
      * Find and replace macros in the given XML section.
