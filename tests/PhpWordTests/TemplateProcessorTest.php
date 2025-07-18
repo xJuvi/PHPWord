@@ -689,12 +689,12 @@ final class TemplateProcessorTest extends \PHPUnit\Framework\TestCase
         $mainPart = '<?xml version="1.0" encoding="UTF-8"?>
         <w:p>
             <w:r>
-                <w:t xml:space="preserve">Hello {#firstname#} {#lastname#}</w:t>
+                <w:t xml:space="preserve">Hello {{firstname}} {#lastname#}</w:t>
             </w:r>
         </w:p>';
 
         $templateProcessor = new TestableTemplateProcesor($mainPart);
-        $templateProcessor->setMacroChars('{#', '#}');
+        $templateProcessor->setMacroChars('{{', '}}');
         $templateProcessor->setValues(['firstname' => 'John', 'lastname' => 'Doe']);
 
         self::assertStringContainsString('Hello John Doe', $templateProcessor->getMainPart());
