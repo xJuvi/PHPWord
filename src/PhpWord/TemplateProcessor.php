@@ -1065,39 +1065,59 @@ class TemplateProcessor
      */
     protected function fixBrokenMacros($documentPart)
 {
-    $opening = self::$macroOpeningChars;
-    $closing = self::$macroClosingChars;
+    $open = self::$macroOpeningChars;
+    $close = self::$macroClosingChars;
 
+    // Sicherheitsprüfung
+    if (empty($open) || empty($close)) {
+        return $documentPart;
+    }
+
+    // 1. Split in alle relevanten XML-Einheiten (Runs + andere Tags)
     preg_match_all('/(<w:r\b.*?<\/w:r>|<[^>]+>)/si', $documentPart, $matches);
     $chunks = $matches[0];
 
     $result = '';
-    $buffer = '';
     $macroText = '';
+    $buffer = '';
     $inMacro = false;
+    $macroStarted = false;
 
     foreach ($chunks as $chunk) {
+        // Ist ein <w:t>-Block enthalten?
         if (preg_match('/<w:t[^>]*>(.*?)<\/w:t>/si', $chunk, $textMatch)) {
             $text = $textMatch[1];
 
-            if (!$inMacro && strpos($opening, $text) === 0) {
-                $macroText = $text;
-                $buffer = $chunk;
-                $inMacro = true;
-            } elseif ($inMacro) {
+            // Wenn wir NICHT sammeln, prüfen ob Makro beginnt
+            if (!$inMacro) {
+                if (strpos($text, substr($open, 0, 1)) === 0) {
+                    $macroText = $text;
+                    $buffer = $chunk;
+                    $inMacro = true;
+                    $macroStarted = (strpos($text, $open) !== false);
+                } else {
+                    $result .= $chunk;
+                }
+            } else {
+                // Wenn wir bereits sammeln
                 $macroText .= $text;
                 $buffer .= $chunk;
 
-                if (strpos($macroText, $closing) !== false) {
+                if (!$macroStarted && strpos($macroText, $open) !== false) {
+                    $macroStarted = true;
+                }
+
+                if ($macroStarted && strpos($macroText, $close) !== false) {
+                    // → vollständiges Makro!
                     $result .= '<w:r><w:t>' . htmlspecialchars($macroText) . '</w:t></w:r>';
                     $macroText = '';
                     $buffer = '';
                     $inMacro = false;
+                    $macroStarted = false;
                 }
-            } else {
-                $result .= $chunk;
             }
         } else {
+            // Kein <w:t> (z. B. <w:proofErr>)
             if ($inMacro) {
                 $buffer .= $chunk;
             } else {
@@ -1106,6 +1126,7 @@ class TemplateProcessor
         }
     }
 
+    // Falls am Ende noch was übrig ist
     if (!empty($buffer)) {
         $result .= $buffer;
     }
