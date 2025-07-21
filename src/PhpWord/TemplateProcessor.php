@@ -1064,19 +1064,55 @@ class TemplateProcessor
      * @return string
      */
     protected function fixBrokenMacros($documentPart)
-    {
-        $brokenMacroOpeningChars = substr(self::$macroOpeningChars, 0, 1);
-        $endMacroOpeningChars = substr(self::$macroOpeningChars, 1);
-        $macroClosingChars = self::$macroClosingChars;
+{
+    $opening = self::$macroOpeningChars;
+    $closing = self::$macroClosingChars;
 
-        return preg_replace_callback(
-            '/\\' . $brokenMacroOpeningChars . '(?:\\' . $endMacroOpeningChars . '|[^{$]*\>\{)[^' . $macroClosingChars . '$]*\}/U',
-            function ($match) {
-                return strip_tags($match[0]);
-            },
-            $documentPart
-        );
+    preg_match_all('/(<w:r\b.*?<\/w:r>|<[^>]+>)/si', $documentPart, $matches);
+    $chunks = $matches[0];
+
+    $result = '';
+    $buffer = '';
+    $macroText = '';
+    $inMacro = false;
+
+    foreach ($chunks as $chunk) {
+        if (preg_match('/<w:t[^>]*>(.*?)<\/w:t>/si', $chunk, $textMatch)) {
+            $text = $textMatch[1];
+
+            if (!$inMacro && strpos($opening, $text) === 0) {
+                $macroText = $text;
+                $buffer = $chunk;
+                $inMacro = true;
+            } elseif ($inMacro) {
+                $macroText .= $text;
+                $buffer .= $chunk;
+
+                if (strpos($macroText, $closing) !== false) {
+                    $result .= '<w:r><w:t>' . htmlspecialchars($macroText) . '</w:t></w:r>';
+                    $macroText = '';
+                    $buffer = '';
+                    $inMacro = false;
+                }
+            } else {
+                $result .= $chunk;
+            }
+        } else {
+            if ($inMacro) {
+                $buffer .= $chunk;
+            } else {
+                $result .= $chunk;
+            }
+        }
     }
+
+    if (!empty($buffer)) {
+        $result .= $buffer;
+    }
+
+    return $result;
+}
+
 
     /**
      * Find and replace macros in the given XML section.
