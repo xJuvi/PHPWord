@@ -1072,23 +1072,65 @@ class TemplateProcessor
         return $documentPart;
     }
 
-    // Suche alle <w:r>...</w:r>-Blöcke
-    return preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/si', function ($match) use ($open, $close) {
-        $runXml = $match[0];
+    // Schritt 1: <w:r> und alle anderen Tags (z. B. <w:proofErr>) extrahieren
+    preg_match_all('/(<w:r\b[^>]*>.*?<\/w:r>|<[^>]+>)/si', $documentPart, $chunks);
+    $chunks = $chunks[0];
 
-        // Extrahiere alle <w:t> Inhalte in diesem Run
-        preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/si', $runXml, $texts);
-        $combined = implode('', $texts[1]);
+    $result = '';
+    $macroText = '';
+    $buffer = '';
+    $inMacro = false;
+    $macroStarted = false;
 
-        // Wenn vollständiges Makro enthalten → ersetze kompletten Run durch einen neuen
-        if (strpos($combined, $open) !== false && strpos($combined, $close) !== false) {
-            $escaped = htmlspecialchars($combined);
-            return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
+    foreach ($chunks as $chunk) {
+        // Suche <w:t>...</w:t>
+        if (preg_match('/<w:t[^>]*>(.*?)<\/w:t>/si', $chunk, $textMatch)) {
+            $text = $textMatch[1];
+
+            if (!$inMacro && str_starts_with($text, substr($open, 0, 1))) {
+                // Start eines Makros erkannt
+                $macroText = $text;
+                $buffer = $chunk;
+                $inMacro = true;
+                $macroStarted = (strpos($text, $open) !== false);
+            } elseif ($inMacro) {
+                $macroText .= $text;
+                $buffer .= $chunk;
+
+                if (!$macroStarted && strpos($macroText, $open) !== false) {
+                    $macroStarted = true;
+                }
+
+                if ($macroStarted && strpos($macroText, $close) !== false) {
+                    // Vollständiges Makro gefunden → zusammenführen
+                    $escaped = htmlspecialchars($macroText, ENT_QUOTES | ENT_XML1);
+                    $result .= '<w:r><w:t>' . $escaped . '</w:t></w:r>';
+                    $macroText = '';
+                    $buffer = '';
+                    $inMacro = false;
+                    $macroStarted = false;
+                }
+            } else {
+                $result .= $chunk;
+            }
+        } else {
+            // z. B. <w:proofErr> oder anderer XML-Tag
+            if ($inMacro) {
+                $buffer .= $chunk;
+            } else {
+                $result .= $chunk;
+            }
         }
+    }
 
-        return $runXml; // Unverändert lassen
-    }, $documentPart);
+    // Falls noch Buffer übrig → anhängen
+    if (!empty($buffer)) {
+        $result .= $buffer;
+    }
+
+    return $result;
 }
+
 
 
 
