@@ -1072,7 +1072,7 @@ class TemplateProcessor
         return $documentPart;
     }
 
-    // Schritt 1: <w:r> und alle anderen Tags (z. B. <w:proofErr>) extrahieren
+    // === Stufe 1: Zerschossene Runs zusammenführen ===
     preg_match_all('/(<w:r\b[^>]*>.*?<\/w:r>|<[^>]+>)/si', $documentPart, $chunks);
     $chunks = $chunks[0];
 
@@ -1083,16 +1083,14 @@ class TemplateProcessor
     $macroStarted = false;
 
     foreach ($chunks as $chunk) {
-        // Suche <w:t>...</w:t>
         if (preg_match('/<w:t[^>]*>(.*?)<\/w:t>/si', $chunk, $textMatch)) {
             $text = $textMatch[1];
 
             if (!$inMacro && str_starts_with($text, substr($open, 0, 1))) {
-                // Start eines Makros erkannt
                 $macroText = $text;
                 $buffer = $chunk;
                 $inMacro = true;
-                $macroStarted = (strpos($text, $open) !== false);
+                $macroStarted = strpos($text, $open) !== false;
             } elseif ($inMacro) {
                 $macroText .= $text;
                 $buffer .= $chunk;
@@ -1102,7 +1100,6 @@ class TemplateProcessor
                 }
 
                 if ($macroStarted && strpos($macroText, $close) !== false) {
-                    // Vollständiges Makro gefunden → zusammenführen
                     $escaped = htmlspecialchars($macroText, ENT_QUOTES | ENT_XML1);
                     $result .= '<w:r><w:t>' . $escaped . '</w:t></w:r>';
                     $macroText = '';
@@ -1114,7 +1111,6 @@ class TemplateProcessor
                 $result .= $chunk;
             }
         } else {
-            // z. B. <w:proofErr> oder anderer XML-Tag
             if ($inMacro) {
                 $buffer .= $chunk;
             } else {
@@ -1123,15 +1119,28 @@ class TemplateProcessor
         }
     }
 
-    // Falls noch Buffer übrig → anhängen
     if (!empty($buffer)) {
         $result .= $buffer;
     }
 
+    // === Stufe 2: Makros innerhalb von einzelnen <w:r> mit mehreren <w:t> ===
+    $result = preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/si', function ($match) use ($open, $close) {
+        $runXml = $match[0];
+        preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/si', $runXml, $texts);
+
+        if (count($texts[1]) > 1) {
+            $combined = implode('', $texts[1]);
+            if (strpos($combined, $open) !== false && strpos($combined, $close) !== false) {
+                $escaped = htmlspecialchars($combined, ENT_QUOTES | ENT_XML1);
+                return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
+            }
+        }
+
+        return $runXml;
+    }, $result);
+
     return $result;
 }
-
-
 
 
     /**
