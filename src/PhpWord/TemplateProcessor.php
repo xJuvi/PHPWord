@@ -1072,7 +1072,7 @@ class TemplateProcessor
         return $documentPart;
     }
 
-    // === STUFE 1: Mehrere <w:r> zusammensetzen ===
+    // === STUFE 1: Makros über mehrere <w:r> reparieren ===
     preg_match_all('/(<w:r\b[^>]*>.*?<\/w:r>|<[^>]+>)/si', $documentPart, $chunks);
     $chunks = $chunks[0];
 
@@ -1123,22 +1123,35 @@ class TemplateProcessor
         $result .= $buffer;
     }
 
-    // === STUFE 2: Innerhalb <w:r> zusammenführen, wenn <w:t> nur Makro enthält ===
+    // === STUFE 2: <w:t> innerhalb eines <w:r> zusammenführen (nur wenn Makro aufgesplittet ist) ===
     $result = preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/si', function ($match) use ($open, $close) {
         $runXml = $match[0];
         preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/si', $runXml, $texts);
 
-        if (count($texts[1]) > 1) {
-            $combined = implode('', $texts[1]);
+        $textParts = $texts[1];
+        if (count($textParts) <= 1) {
+            return $runXml; // Nur ein <w:t>: nichts tun
+        }
 
-            // Nur zusammenführen, wenn ausschließlich ein einzelnes Makro enthalten ist
-            $trimmed = trim($combined);
-            $macroPattern = '/^' . preg_quote($open, '/') . '[^' . preg_quote($open . $close, '/') . ']+' . preg_quote($close, '/') . '$/';
-
-            if (preg_match($macroPattern, $trimmed)) {
-                $escaped = htmlspecialchars($trimmed, ENT_QUOTES | ENT_XML1);
-                return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
+        // Wenn genau EINER der Teile das ganze Makro enthält → kein Fix nötig
+        foreach ($textParts as $part) {
+            $trimmed = trim($part);
+            if (
+                str_starts_with($trimmed, $open) &&
+                str_ends_with($trimmed, $close)
+            ) {
+                return $runXml;
             }
+        }
+
+        // Kombination prüfen: ist es genau ein Makro, aber aufgeteilt?
+        $combined = implode('', $textParts);
+        $trimmed = trim($combined);
+        $macroPattern = '/^' . preg_quote($open, '/') . '[^' . preg_quote($open . $close, '/') . ']+' . preg_quote($close, '/') . '$/';
+
+        if (preg_match($macroPattern, $trimmed)) {
+            $escaped = htmlspecialchars($trimmed, ENT_QUOTES | ENT_XML1);
+            return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
         }
 
         return $runXml;
