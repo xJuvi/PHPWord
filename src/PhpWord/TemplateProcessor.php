@@ -1072,7 +1072,7 @@ class TemplateProcessor
         return $documentPart;
     }
 
-    // === Stufe 1: Zerschossene Runs zusammenführen ===
+    // === Stufe 1: Zerschossene Makros über mehrere <w:r> zusammenführen ===
     preg_match_all('/(<w:r\b[^>]*>.*?<\/w:r>|<[^>]+>)/si', $documentPart, $chunks);
     $chunks = $chunks[0];
 
@@ -1123,14 +1123,17 @@ class TemplateProcessor
         $result .= $buffer;
     }
 
-    // === Stufe 2: Makros innerhalb von einzelnen <w:r> mit mehreren <w:t> ===
+    // === Stufe 2: Zusammenführung von <w:t> innerhalb eines einzelnen <w:r> ===
     $result = preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/si', function ($match) use ($open, $close) {
         $runXml = $match[0];
         preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/si', $runXml, $texts);
 
         if (count($texts[1]) > 1) {
             $combined = implode('', $texts[1]);
-            if (strpos($combined, $open) !== false && strpos($combined, $close) !== false) {
+
+            // Nur wenn der gesamte Text ein vollständiges Makro ist
+            $pattern = '/^' . preg_quote($open, '/') . '.*?' . preg_quote($close, '/') . '$/';
+            if (preg_match($pattern, $combined)) {
                 $escaped = htmlspecialchars($combined, ENT_QUOTES | ENT_XML1);
                 return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
             }
