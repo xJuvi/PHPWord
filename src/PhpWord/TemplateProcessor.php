@@ -1072,7 +1072,7 @@ class TemplateProcessor
         return $documentPart;
     }
 
-    // === Stufe 1: Runs über mehrere <w:r> zusammenführen ===
+    // === STUFE 1: Mehrere <w:r> zusammensetzen ===
     preg_match_all('/(<w:r\b[^>]*>.*?<\/w:r>|<[^>]+>)/si', $documentPart, $chunks);
     $chunks = $chunks[0];
 
@@ -1123,7 +1123,7 @@ class TemplateProcessor
         $result .= $buffer;
     }
 
-    // === Stufe 2: Nur zusammenführen, wenn das Makro direkt anfangs im <w:r> beginnt ===
+    // === STUFE 2: Innerhalb <w:r> zusammenführen, wenn <w:t> nur Makro enthält ===
     $result = preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/si', function ($match) use ($open, $close) {
         $runXml = $match[0];
         preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/si', $runXml, $texts);
@@ -1131,14 +1131,12 @@ class TemplateProcessor
         if (count($texts[1]) > 1) {
             $combined = implode('', $texts[1]);
 
-            // Stelle sicher: KEIN statischer Text vor dem Makro
-            if (
-                strpos($texts[1][0], $open[0]) === 0 &&
-                strpos($combined, $open) !== false &&
-                strpos($combined, $close) !== false &&
-                preg_match('/^' . preg_quote($open, '/') . '.*?' . preg_quote($close, '/') . '$/', $combined)
-            ) {
-                $escaped = htmlspecialchars($combined, ENT_QUOTES | ENT_XML1);
+            // Nur zusammenführen, wenn ausschließlich ein einzelnes Makro enthalten ist
+            $trimmed = trim($combined);
+            $macroPattern = '/^' . preg_quote($open, '/') . '[^' . preg_quote($open . $close, '/') . ']+' . preg_quote($close, '/') . '$/';
+
+            if (preg_match($macroPattern, $trimmed)) {
+                $escaped = htmlspecialchars($trimmed, ENT_QUOTES | ENT_XML1);
                 return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
             }
         }
