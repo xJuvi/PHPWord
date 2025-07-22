@@ -1123,34 +1123,29 @@ class TemplateProcessor
         $result .= $buffer;
     }
 
-    // === STUFE 2: <w:t> innerhalb eines <w:r> zusammenführen (nur wenn Makro aufgesplittet ist) ===
+    // === STUFE 2: Makros innerhalb eines <w:r> zusammenführen, falls auf mehrere <w:t> verteilt ===
     $result = preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/si', function ($match) use ($open, $close) {
         $runXml = $match[0];
         preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/si', $runXml, $texts);
 
         $textParts = $texts[1];
+
         if (count($textParts) <= 1) {
             return $runXml; // Nur ein <w:t>: nichts tun
         }
 
-        // Wenn genau EINER der Teile das ganze Makro enthält → kein Fix nötig
+        // Prüfe: Enthält einer der <w:t>-Teile bereits ein vollständiges Makro? → Nichts tun
+        $macroPattern = '/^' . preg_quote($open, '/') . '[^' . preg_quote($open . $close, '/') . ']+' . preg_quote($close, '/') . '$/';
         foreach ($textParts as $part) {
-            $trimmed = trim($part);
-            if (
-                str_starts_with($trimmed, $open) &&
-                str_ends_with($trimmed, $close)
-            ) {
+            if (preg_match($macroPattern, trim($part))) {
                 return $runXml;
             }
         }
 
-        // Kombination prüfen: ist es genau ein Makro, aber aufgeteilt?
+        // Prüfe: ergibt die Kombination aller Teile ein vollständiges Makro?
         $combined = implode('', $textParts);
-        $trimmed = trim($combined);
-        $macroPattern = '/^' . preg_quote($open, '/') . '[^' . preg_quote($open . $close, '/') . ']+' . preg_quote($close, '/') . '$/';
-
-        if (preg_match($macroPattern, $trimmed)) {
-            $escaped = htmlspecialchars($trimmed, ENT_QUOTES | ENT_XML1);
+        if (preg_match($macroPattern, trim($combined))) {
+            $escaped = htmlspecialchars(trim($combined), ENT_QUOTES | ENT_XML1);
             return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
         }
 
@@ -1159,7 +1154,6 @@ class TemplateProcessor
 
     return $result;
 }
-
 
     /**
      * Find and replace macros in the given XML section.
