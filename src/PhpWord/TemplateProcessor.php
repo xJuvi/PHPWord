@@ -1063,7 +1063,7 @@ class TemplateProcessor
      *
      * @return string
      */
-    protected function fixBrokenMacros($documentPart)
+    public function fixBrokenMacros($documentPart)
 {
     $open = self::$macroOpeningChars;
     $close = self::$macroClosingChars;
@@ -1123,18 +1123,17 @@ class TemplateProcessor
         $result .= $buffer;
     }
 
-    // === STUFE 2: Makros innerhalb eines <w:r> zusammenführen, falls auf mehrere <w:t> verteilt ===
+    // === STUFE 2: Makros innerhalb eines <w:r> auf mehrere <w:t> verteilt, aber korrekt reparieren ===
     $result = preg_replace_callback('/<w:r\b[^>]*>.*?<\/w:r>/si', function ($match) use ($open, $close) {
         $runXml = $match[0];
         preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/si', $runXml, $texts);
 
         $textParts = $texts[1];
-
         if (count($textParts) <= 1) {
-            return $runXml; // Nur ein <w:t>: nichts tun
+            return $runXml;
         }
 
-        // Prüfe: Enthält einer der <w:t>-Teile bereits ein vollständiges Makro? → Nichts tun
+        // Prüfe, ob einer der Teile bereits ein vollständiges Makro enthält → nichts tun
         $macroPattern = '/^' . preg_quote($open, '/') . '[^' . preg_quote($open . $close, '/') . ']+' . preg_quote($close, '/') . '$/';
         foreach ($textParts as $part) {
             if (preg_match($macroPattern, trim($part))) {
@@ -1142,11 +1141,47 @@ class TemplateProcessor
             }
         }
 
-        // Prüfe: ergibt die Kombination aller Teile ein vollständiges Makro?
-        $combined = implode('', $textParts);
-        if (preg_match($macroPattern, trim($combined))) {
-            $escaped = htmlspecialchars(trim($combined), ENT_QUOTES | ENT_XML1);
-            return '<w:r><w:t>' . $escaped . '</w:t></w:r>';
+        // Suche in den zusammengesetzten Teilen nach einem vollständigen Makro
+        $buffer = '';
+        $newTextParts = [];
+        $insideMacro = false;
+        $before = '';
+        $after = '';
+        $macro = '';
+
+               foreach ($textParts as $index => $part) {
+            $buffer .= $part;
+
+            if (!$insideMacro && strpos($buffer, $open) !== false) {
+                $insideMacro = true;
+                $split = explode($open, $buffer, 2);
+                $before = $split[0];
+                $buffer = $open . $split[1]; // beginne bei der echten Makroöffnung
+            }
+
+            if ($insideMacro && strpos($buffer, $close) !== false) {
+                $macroMatch = [];
+                $macroPatternFull = '/' . preg_quote($open, '/') . '[^' . preg_quote($close, '/') . ']+' . preg_quote($close, '/') . '/';
+                if (preg_match($macroPatternFull, $buffer, $macroMatch)) {
+                    $macro = $macroMatch[0];
+                    $after = implode('', array_slice($textParts, $index + 1));
+                    break;
+                }
+            }
+        }
+
+
+        if ($macro !== '') {
+            $xml = '<w:r>';
+            if ($before !== '') {
+                $xml .= '<w:t>' . htmlspecialchars($before, ENT_QUOTES | ENT_XML1) . '</w:t>';
+            }
+            $xml .= '<w:t>' . htmlspecialchars($macro, ENT_QUOTES | ENT_XML1) . '</w:t>';
+            if ($after !== '') {
+                $xml .= '<w:t>' . htmlspecialchars($after, ENT_QUOTES | ENT_XML1) . '</w:t>';
+            }
+            $xml .= '</w:r>';
+            return $xml;
         }
 
         return $runXml;
